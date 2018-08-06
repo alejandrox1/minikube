@@ -23,10 +23,14 @@ const machineName = "mymachine"
 
 var minipath = filepath.Join(os.Getenv("PWD"), "minikube")
 
+// makeMiniPath returns a path with respect to the minikube directory.
 func makeMiniPath(fileName string) string {
 	return filepath.Join(minipath, fileName)
 }
 
+// setupDirs creates the "minikube" directory in the current working directory.
+// The "minikube" directory will have the "certs" and a "machines"
+// subdirectories.
 func setupDirs() error {
 	for _, path := range [...]string{minipath, makeMiniPath("certs"), makeMiniPath("machines")} {
 		if err := os.MkdirAll(path, 0777); err != nil {
@@ -92,6 +96,8 @@ func setDriverOptions(h *host.Host) error {
 	return nil
 }
 
+// createHost creates, sets the options, and saves the host using the
+// libmachine client api.
 func createHost(api *libmachine.Client) (*host.Host, error) {
 	rawDriver, err := json.Marshal(&drivers.BaseDriver{
 		MachineName: machineName,
@@ -113,7 +119,7 @@ func createHost(api *libmachine.Client) (*host.Host, error) {
 	}
 
 	if err := api.Create(h); err != nil {
-		// Wait for all lgos to reach the client.
+		// Wait for all logs to reach the client.
 		time.Sleep(2 * time.Second)
 		return nil, fmt.Errorf("Error creating host: %s", err)
 	}
@@ -124,8 +130,10 @@ func createHost(api *libmachine.Client) (*host.Host, error) {
 	return h, nil
 }
 
+// getOrCreateHost checks if VM has already been created, if so then it loads
+// it, otherwise it creates it. 
 func getOrCreateHost(api *libmachine.Client) (*host.Host, error) {
-	if exists, err := api.Exists(machineName); err != nil {
+    if exists, err := api.Exists(machineName); err != nil {
 		return nil, fmt.Errorf("Error checking if host exists: %s", err)
 	} else if exists {
 		log.Println("Machine already exists!")
@@ -139,14 +147,18 @@ func getOrCreateHost(api *libmachine.Client) (*host.Host, error) {
 	}
 }
 
+
 func main() {
-	setupDirs()
+	// Setup minikube directory structure.
+    setupDirs()
+
 	api := libmachine.NewClient(minipath, makeMiniPath("certs"))
 	defer api.Close()
 
 	h, err := getOrCreateHost(api)
 	if err != nil {
 		log.Panicf("Error getting host: %s", err)
+        os.Exit(1)
 	}
 
 	host, err := h.Driver.GetURL()
@@ -156,12 +168,14 @@ func main() {
 	os.Setenv("DOCKER_HOST", host)
 	os.Setenv("DOCKER_CERT_PATH", makeMiniPath("certs"))
 	os.Setenv("DOCKER_TLS_VERIFY", "1")
-	ctlr, err := localkubectl.NewControllerFromEnv(os.Stdout)
+	// Create a new Docker client (controller) for the localkube.
+    ctlr, err := localkubectl.NewControllerFromEnv(os.Stdout)
 	if err != nil {
 		log.Panicf("Error creating controller: %s", err)
 	}
 
 	startCluster := func() error {
+        // ctrID is the id of the localkube container.
 		ctrID, running, err := ctlr.OnlyLocalkubeCtr()
 		if err != nil {
 			if err == localkubectl.ErrNoContainer {
