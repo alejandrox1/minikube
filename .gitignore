@@ -1,0 +1,5 @@
+# minikube repo
+minikube/
+
+# swp files
+*.swp
